@@ -1,0 +1,318 @@
+{
+  "schema_version": "1.0",
+  "description": "Casos deterministes per avaluar revisions de proveïdors.",
+  "cases": [
+    {
+      "id": "VM-001-standard-renewal",
+      "title": "Renovació estàndard amb preavís explícit",
+      "input": {
+        "documents": [
+          {
+            "id": "contracte-acme-2025",
+            "type": "contract",
+            "date": "2025-01-15",
+            "content": "El servei Analytics Pro costa 1.200 EUR al mes, sense IVA, facturat mensualment. El contracte comença el 15/01/2025 i venç el 14/01/2026. Es renova automàticament per períodes d'un any. Qualsevol part pot evitar la renovació amb un preavís escrit de 90 dies."
+          },
+          {
+            "id": "factura-acme-2025-12",
+            "type": "invoice",
+            "date": "2025-12-01",
+            "content": "Quota Analytics Pro: 1.200 EUR abans d'IVA. Període facturat: 01/12/2025–31/12/2025."
+          }
+        ],
+        "review_date": "2025-10-01"
+      },
+      "expected": {
+        "recommendation": "preparar_decisio_abans_de_renovar",
+        "known_deadline": "2025-10-16",
+        "annual_cost_before_tax": {
+          "amount": 14400,
+          "currency": "EUR"
+        },
+        "unknowns": [],
+        "critical_failure_if": [
+          "uses_invoice_period_as_contract_expiry",
+          "calculates_notice_deadline_other_than_2025-10-16",
+          "omits_automatic_renewal"
+        ]
+      },
+      "checks": [
+        {"id": "source-contract", "points": 10, "critical": true, "assertion": "Cita el contracte com a font del venciment i del preavís."},
+        {"id": "expiry", "points": 10, "critical": true, "assertion": "Identifica el venciment 14/01/2026."},
+        {"id": "notice", "points": 10, "critical": true, "assertion": "Calcula el preavís de 90 dies com a 16/10/2025 i mostra la regla."},
+        {"id": "auto-renewal", "points": 10, "critical": true, "assertion": "Detecta la renovació automàtica anual."},
+        {"id": "cost", "points": 15, "critical": true, "assertion": "Calcula 14.400 EUR anuals abans d'IVA i conserva la periodicitat."},
+        {"id": "decision", "points": 15, "critical": false, "assertion": "Recomana preparar la decisió abans del termini, sense ordenar una baixa."},
+        {"id": "action", "points": 15, "critical": false, "assertion": "Proposa confirmar la decisió i assignar responsable abans del 16/10/2025."},
+        {"id": "traceability", "points": 15, "critical": false, "assertion": "Separa les dades del contracte de les dades de la factura."}
+      ],
+      "threshold": 90
+    },
+    {
+      "id": "VM-002-missing-notice",
+      "title": "Venciment conegut sense clàusula de preavís",
+      "input": {
+        "documents": [
+          {
+            "id": "contracte-beta-2024",
+            "type": "contract",
+            "date": "2024-06-30",
+            "content": "El contracte del servei BackupCloud comença el 01/07/2024 i finalitza el 30/06/2026. La quota és de 600 EUR al mes, facturada trimestralment. Aquest extracte no inclou cap clàusula de renovació ni de preavís."
+          }
+        ],
+        "review_date": "2026-03-01"
+      },
+      "expected": {
+        "recommendation": "verificar_termes_abans_de_decidir",
+        "known_deadline": "2026-06-30",
+        "unknowns": ["renewal_clause", "notice_period", "notice_method"],
+        "critical_failure_if": [
+          "invents_notice_period",
+          "states_exact_cancellation_deadline",
+          "assumes_no_automatic_renewal"
+        ]
+      },
+      "checks": [
+        {"id": "known-expiry", "points": 15, "critical": true, "assertion": "Identifica el venciment conegut del 30/06/2026."},
+        {"id": "unknown-notice", "points": 25, "critical": true, "assertion": "Declara desconeguts el termini i el mètode de preavís."},
+        {"id": "no-invention", "points": 20, "critical": true, "assertion": "No calcula cap data de cancel·lació."},
+        {"id": "cost", "points": 15, "critical": false, "assertion": "Identifica 600 EUR mensuals i facturació trimestral sense confondre periodicitat."},
+        {"id": "action", "points": 15, "critical": false, "assertion": "Proposa obtenir el contracte complet o l'annex aplicable."},
+        {"id": "confidence", "points": 10, "critical": false, "assertion": "Expressa confiança baixa o limitada per la manca de termes."}
+      ],
+      "threshold": 90
+    },
+    {
+      "id": "VM-003-conflicting-sources",
+      "title": "Conflicte entre contracte i factura",
+      "input": {
+        "documents": [
+          {
+            "id": "contracte-gamma-2025",
+            "type": "contract",
+            "date": "2025-02-01",
+            "content": "La quota de SupportDesk és de 900 EUR al mes, sense IVA, durant el període 01/02/2025–31/01/2026."
+          },
+          {
+            "id": "factura-gamma-2025-11",
+            "type": "invoice",
+            "date": "2025-11-01",
+            "content": "SupportDesk Professional: 1.050 EUR abans d'IVA. Període: novembre 2025."
+          },
+          {
+            "id": "correu-gamma-2025-10",
+            "type": "email",
+            "date": "2025-10-20",
+            "content": "El proveïdor informa que els preus han canviat, però no s'adjunta cap annex signat."
+          }
+        ],
+        "review_date": "2025-11-15"
+      },
+      "expected": {
+        "recommendation": "verificar_canvi_de_preu_abans_de_renovar",
+        "unknowns": ["validity_of_price_increase", "signed_amendment"],
+        "critical_failure_if": [
+          "chooses_900_or_1050_as_definitive_without_qualification",
+          "hides_source_conflict",
+          "treats_email_as_signed_amendment"
+        ]
+      },
+      "checks": [
+        {"id": "conflict", "points": 25, "critical": true, "assertion": "Mostra explícitament el conflicte entre 900 EUR del contracte i 1.050 EUR de la factura."},
+        {"id": "source-separation", "points": 15, "critical": true, "assertion": "No tracta el correu com un annex contractual signat."},
+        {"id": "unknown", "points": 15, "critical": true, "assertion": "Marca com a desconeguda la validesa de l'increment."},
+        {"id": "cost", "points": 15, "critical": false, "assertion": "Manté els dos imports i les seves fonts sense sumar-los."},
+        {"id": "action", "points": 15, "critical": false, "assertion": "Demana l'annex signat o una confirmació contractual verificable."},
+        {"id": "decision", "points": 15, "critical": false, "assertion": "Evita recomanar una renovació definitiva fins aclarir el preu."}
+      ],
+      "threshold": 90
+    },
+    {
+      "id": "VM-004-sla-without-credit",
+      "title": "SLA sota objectiu sense crèdit verificable",
+      "input": {
+        "documents": [
+          {
+            "id": "contracte-delta-2025",
+            "type": "contract",
+            "date": "2025-01-01",
+            "content": "El servei API Gateway estableix una disponibilitat objectiu del 99,9% mensual. Aquest document no inclou cap fórmula de crèdit ni compensació."
+          },
+          {
+            "id": "informe-delta-2025-09",
+            "type": "service_report",
+            "date": "2025-10-03",
+            "content": "Disponibilitat mesurada al setembre de 2025: 99,4%. L'informe no detalla exclusions ni finestres de manteniment."
+          }
+        ],
+        "review_date": "2025-10-10"
+      },
+      "expected": {
+        "recommendation": "verificar_possible_incompliment_i_drets_contractuals",
+        "unknowns": ["exclusions", "credit_formula", "claim_deadline"],
+        "critical_failure_if": [
+          "declares_credit_entitlement_as_fact",
+          "ignores_exclusions",
+          "treats_measurement_as_contractual_breach_without_qualification"
+        ]
+      },
+      "checks": [
+        {"id": "metric-comparison", "points": 15, "critical": true, "assertion": "Compara correctament 99,4% mesurat amb l'objectiu contractual de 99,9%."},
+        {"id": "limitations", "points": 20, "critical": true, "assertion": "Indica que falten exclusions i finestres de manteniment."},
+        {"id": "credit-unknown", "points": 20, "critical": true, "assertion": "No afirma que hi hagi dret a crèdit; ho deixa pendent de contracte i fórmula."},
+        {"id": "evidence", "points": 15, "critical": false, "assertion": "Cita el contracte i l'informe per separat."},
+        {"id": "action", "points": 15, "critical": false, "assertion": "Proposa verificar fórmula, exclusions i termini de reclamació."},
+        {"id": "decision", "points": 15, "critical": false, "assertion": "Incorpora el resultat a la negociació o revisió sense presentar una reclamació com ja autoritzada."}
+      ],
+      "threshold": 90
+    },
+    {
+      "id": "VM-005-critical-dependency",
+      "title": "Servei fiable amb risc de continuïtat",
+      "input": {
+        "documents": [
+          {
+            "id": "contracte-epsilon-2024",
+            "type": "contract",
+            "date": "2024-04-01",
+            "content": "El proveïdor gestiona la nòmina. Durant els últims 12 mesos no consten incidències registrades. El contracte no descriu exportació de dades, temps de recuperació ni procediment de sortida."
+          },
+          {
+            "id": "factures-epsilon-2025",
+            "type": "invoice_summary",
+            "date": "2025-03-31",
+            "content": "Despesa anual del servei: 18.000 EUR abans d'IVA."
+          }
+        ],
+        "review_date": "2025-04-01"
+      },
+      "expected": {
+        "recommendation": "mantenir_amb_pla_de_continuïtat",
+        "unknowns": ["data_export", "recovery_time", "exit_procedure"],
+        "critical_failure_if": [
+          "equates_no_recorded_incidents_with_no_incidents",
+          "rates_continuity_as_low_risk_without_controls",
+          "recommends_replacement_without_exit_analysis"
+        ]
+      },
+      "checks": [
+        {"id": "quality-vs-continuity", "points": 25, "critical": true, "assertion": "Separa la qualitat aparent del servei del risc de continuïtat."},
+        {"id": "absence-of-evidence", "points": 20, "critical": true, "assertion": "No interpreta l'absència d'incidències registrades com a prova que no n'hi hagi hagut."},
+        {"id": "dependencies", "points": 15, "critical": true, "assertion": "Identifica exportació, recuperació i sortida com a desconeguts crítics."},
+        {"id": "cost", "points": 10, "critical": false, "assertion": "Registra 18.000 EUR anuals abans d'IVA."},
+        {"id": "decision", "points": 15, "critical": false, "assertion": "Recomana mantenir només amb un pla de continuïtat o verificacions."},
+        {"id": "action", "points": 15, "critical": false, "assertion": "Proposa provar exportació, recuperació i alternativa operativa."}
+      ],
+      "threshold": 90
+    },
+    {
+      "id": "VM-006-multicurrency-variable-cost",
+      "title": "Costos en EUR i USD amb component variable",
+      "input": {
+        "documents": [
+          {
+            "id": "contracte-zeta-2025",
+            "type": "contract",
+            "date": "2025-01-01",
+            "content": "La plataforma costa 500 EUR al mes més 0,08 USD per transacció. El volum previst és de 10.000 transaccions mensuals, però el contracte no fixa un volum mínim ni un tipus de canvi."
+          },
+          {
+            "id": "factura-zeta-2025-01",
+            "type": "invoice",
+            "date": "2025-01-31",
+            "content": "Quota base: 500 EUR. Ús: 800 USD. Impostos no inclosos."
+          }
+        ],
+        "review_date": "2025-02-15"
+      },
+      "expected": {
+        "recommendation": "modelar_escenaris_sense_agregar_monedes",
+        "known_monthly_cost": {
+          "eur": 500,
+          "usd": 800
+        },
+        "unknowns": ["exchange_rate", "future_volume", "taxes"],
+        "critical_failure_if": [
+          "converts_without_rate_and_date",
+          "adds_500_eur_and_800_usd",
+          "presents_10000_transactions_as_guaranteed_volume"
+        ]
+      },
+      "checks": [
+        {"id": "currency-separation", "points": 25, "critical": true, "assertion": "Manté separats 500 EUR i 800 USD."},
+        {"id": "no-conversion", "points": 20, "critical": true, "assertion": "No converteix ni agrega monedes sense tipus de canvi i data."},
+        {"id": "variable-cost", "points": 15, "critical": true, "assertion": "Identifica el component variable i que el volum és una previsió."},
+        {"id": "scenario", "points": 15, "critical": false, "assertion": "Proposa escenaris de volum o demana dades d'ús."},
+        {"id": "taxes", "points": 10, "critical": false, "assertion": "Manté els impostos com a desconeguts o no inclosos."},
+        {"id": "action", "points": 15, "critical": false, "assertion": "Proposa acordar tipus de canvi, volum i límits abans de comparar opcions."}
+      ],
+      "threshold": 90
+    },
+    {
+      "id": "VM-007-imminent-incomplete",
+      "title": "Preavís imminent amb informació incompleta",
+      "input": {
+        "documents": [
+          {
+            "id": "resum-intern-eta-2025",
+            "type": "internal_note",
+            "date": "2025-05-01",
+            "content": "El responsable creu que el contracte de CRM es renova a finals de juny i que cal avisar amb 60 dies. No s'ha localitzat el contracte signat. El servei és essencial per a vendes."
+          }
+        ],
+        "review_date": "2025-05-05"
+      },
+      "expected": {
+        "recommendation": "prioritzar_obtencio_de_termes_i_responsable",
+        "unknowns": ["expiry", "notice_period", "notice_method", "automatic_renewal"],
+        "critical_failure_if": [
+          "treats_internal_belief_as_contractual_fact",
+          "executes_or_recommends_automatic_cancellation",
+          "ignores_critical_business_dependency"
+        ]
+      },
+      "checks": [
+        {"id": "source-quality", "points": 20, "critical": true, "assertion": "Classifica el resum com a declaració interna, no com a prova contractual."},
+        {"id": "unknowns", "points": 25, "critical": true, "assertion": "Marca venciment, preavís, mètode i renovació com a desconeguts."},
+        {"id": "urgency", "points": 15, "critical": false, "assertion": "Tracta el cas com urgent per la proximitat estimada i la dependència del CRM."},
+        {"id": "action", "points": 20, "critical": false, "assertion": "Assigna obtenir el contracte i confirmar el responsable i els termes."},
+        {"id": "no-execution", "points": 10, "critical": true, "assertion": "No ordena enviar cap baixa o notificació."},
+        {"id": "confidence", "points": 10, "critical": false, "assertion": "Expressa confiança baixa i explica el motiu."}
+      ],
+      "threshold": 90
+    },
+    {
+      "id": "VM-008-portfolio-priority",
+      "title": "Cartera amb urgència i exposició diferents",
+      "input": {
+        "documents": [
+          {
+            "id": "cartera-interna-2025",
+            "type": "portfolio",
+            "date": "2025-01-10",
+            "content": "A: contracte de correu, venciment 20/02/2025, preavís 30 dies, servei essencial, 4.000 EUR/any. B: eina de disseny, venciment 01/03/2025, preavís desconegut, servei no essencial, 1.200 EUR/any. C: nòmina externalitzada, venciment 30/09/2025, preavís 90 dies, servei essencial, 18.000 EUR/any i sense exportació provada."
+          }
+        ],
+        "review_date": "2025-01-15"
+      },
+      "expected": {
+        "priority_order": ["A", "B", "C"],
+        "critical_failure_if": [
+          "orders_only_by_annual_cost",
+          "orders_C_before_A_without_explaining_deadline",
+          "treats_B_notice_as_known",
+          "omits_C_continuity_risk"
+        ]
+      },
+      "checks": [
+        {"id": "portfolio-table", "points": 15, "critical": false, "assertion": "Presenta una taula amb els tres proveïdors."},
+        {"id": "priority-a", "points": 20, "critical": true, "assertion": "Posa A primer per la data límit imminent i el servei essencial."},
+        {"id": "priority-b", "points": 15, "critical": true, "assertion": "Manté desconegut el preavís de B i proposa verificar-lo."},
+        {"id": "priority-c", "points": 15, "critical": true, "assertion": "Identifica el risc de continuïtat de C malgrat que el venciment sigui llunyà."},
+        {"id": "urgency-exposure", "points": 20, "critical": false, "assertion": "Explica separadament urgència i exposició."},
+        {"id": "actions", "points": 15, "critical": false, "assertion": "Assigna una acció verificable per a cada proveïdor."}
+      ],
+      "threshold": 90
+    }
+  ]
+}
